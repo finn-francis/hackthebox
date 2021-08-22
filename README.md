@@ -7,3 +7,4 @@
 
 ### Live
 - [BountyHunter](easy/bounty_hunter.md)
+- [Cap](easy/cap.md)
